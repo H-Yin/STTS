@@ -1,5 +1,8 @@
 import numpy as np
 import pandas as pd
+
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from datetime import datetime
@@ -15,6 +18,8 @@ from sklearn.metrics import (
 )
 from sklearn.linear_model import (
     LinearRegression,
+    Ridge,
+
     SGDRegressor
 )
 from sklearn.svm import SVR
@@ -48,7 +53,7 @@ class STTS(object):
 
     def load_data(self):
         self.train_data = pd.read_csv(self.train_data_path, skiprows=[1], encoding='gb2312')
-        self.train_data.corr().to_csv('../data/tmp/corr.csv')
+        #self.train_data.corr().to_csv('../data/tmp/corr.csv')
         self.test_data = pd.read_csv(self.test_data_path, skiprows=[1], encoding='gb2312')
 
     def get_metrics(self, test_y, pre_test_y):
@@ -100,6 +105,37 @@ class STTS(object):
         res = pd.concat(res)
         res.to_csv(filename, encoding='utf-8', index=False)
 
+class SelectModel(object):
+    models = []
+
+    def select_ridge(self, target):
+        n_alphas = 200
+        alphas = np.logspace(-10, -2, n_alphas)
+        for a in alphas: 
+            model = (Ridge, {'alpha': a,'fit_intercept':False})
+            models.append(model)
+        coefs = []
+        for m in models:
+            s= STTS(model=m[0], params=m[1])
+            s.load_data()
+            model, metrics, score = s.train_one(target)
+            coefs.append(model.coef_)
+            #s.predict_one(model, target)
+
+        ax = plt.gca()
+
+        ax.plot(alphas, coefs)
+        ax.set_xscale('log')
+        ax.set_xlim(ax.get_xlim()[::-1])  # reverse axis
+        plt.xlabel('alpha')
+        plt.ylabel('weights')
+        plt.title('Ridge coefficients as a function of the regularization')
+        plt.axis('tight')
+        now = datetime.now().strftime("%Y%m%d%H%M")
+        filename = "../data/img/%s_%s.png" %(now, models[0].__class__.__name__)
+        plt.savefig(filename)
+
+
 if __name__=='__main__':
     models = [
         #(LinearRegression, {}),
@@ -112,12 +148,8 @@ if __name__=='__main__':
         #(DecisionTreeRegressor, {}),
         #(RandomForestRegressor, {}),
         #(ExtraTreesRegressor, {}),
-        (GradientBoostingRegressor, {}),
+        #(GradientBoostingRegressor, {}),
     ]
     for target in ['A_Seqv']:# 'B_Seqv', 'C_Seqv', 'D_Seqv']:
         print('-'*40, target, '-'*40)
-        for m in models:
-            s= STTS(model=m[0], params=m[1])
-            s.load_data()
-            model, metrics, score = s.train_one(target)
-            s.predict_one(model, target)
+        SelectModel().select_ridge(target)
